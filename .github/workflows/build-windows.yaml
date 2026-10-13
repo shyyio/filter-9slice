@@ -1,0 +1,33 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: cmake --preset windows-x64
+      - run: cmake --build --preset windows-x64
+      - run: cmake --install build_x64 --prefix release --config RelWithDebInfo
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content buildspec.json | ConvertFrom-Json).version
+          $zip = "filter-9slice-$version-windows-x64.zip"
+          Compress-Archive release/* $zip
+
+          gh release view "v$version" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            echo "v$version already released"
+            exit 0
+          }
+          gh release create "v$version" $zip --target $env:GITHUB_SHA --generate-notes
